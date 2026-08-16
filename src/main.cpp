@@ -14,8 +14,16 @@ int main() {
             std::cout << "Shutting down Forge" << std::endl;
             break;
         }
+        else if(userInput == "help"){
+            std::cout << "Available commands: "<<std::endl;
+            std::cout <<"help\n status\n exit\n"<<std::endl;
+        }
+        else if(userInput == "status"){
+            std::cout << "Forge status" << std::endl;
+             std::cout << "Jobs: 0" << std::endl;
+        }
         else {
-            std::cout << "You entered: " << userInput << std::endl;
+            std::cout << "Unknown command: " << userInput << std::endl;
         }
     }
 
