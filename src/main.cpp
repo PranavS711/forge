@@ -2,13 +2,23 @@
 #include <string>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <vector>
+
+struct Job {
+    int id;
+    pid_t pid;  // stores the process ID
+    std::string program;
+    std::string status;
+};
 
 int main() {
     std::cout << "Forge starting..." << std::endl;
 
     std::string command;
     std::string program;
+    int nextJobId = 1;
 
+    std::vector<Job> jobs;
     while (true) {
         std::cout << "forge> ";
         std::cin >> command;
@@ -23,19 +33,44 @@ int main() {
         }
         else if(command == "status"){
             std::cout << "Forge status" << std::endl;
-             std::cout << "Jobs: 0" << std::endl;
+            std::cout << "Jobs: " << jobs.size() << std::endl;
+            for (Job& job : jobs) {
+                int result = waitpid(job.pid, nullptr, WNOHANG);
+
+                    if (result == job.pid) {
+                        job.status = "completed";
+                    }
+}
+            for (const Job& job : jobs) {
+                std::cout << "Job " << job.id
+                  << " | PID: " << job.pid
+                  << " | Program: " << job.program
+                  << " | Status: " << job.status
+                  << std::endl;
+                }
         }
         else if(command == "run"){
             std::cin >> program;
-            pid_t pid = fork();
+            pid_t pid = fork();  // Create a child process; fork() returns 0 to the child  and the child's PID to the parent
 
-            if (pid == 0) {
-                    execl(program.c_str(), program.c_str(), nullptr);
-
+            if (pid == 0) { // This code is running in the child process
+                execl(program.c_str(), program.c_str(), nullptr);   // Replace the child process with the program the user requested
+                // c_str() converts the C++ string into the C-style string exec expects
                 std::cout << "Failed to run program." << std::endl;
             }
-            else {
-                    waitpid(pid, nullptr, 0);
+            else { // Parent process
+                        Job job;
+                        job.id = nextJobId;
+                        job.pid = pid;
+                        job.program = program;
+                        job.status = "running";
+                        std::cout << "Job " << job.id << " started (PID: "
+                                << job.pid << ")" << std::endl;
+
+                        jobs.push_back(job);  // Store the job so Forge can track it after this command finishes
+
+
+                         nextJobId++; // increment the ID so the next job gets a unique one
             }
         }
         else {
