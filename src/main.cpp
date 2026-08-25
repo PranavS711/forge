@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <vector>
+#include <signal.h>
 
 struct Job {
     int id;
@@ -29,18 +30,28 @@ int main() {
         }
         else if(command == "help"){
             std::cout << "Available commands: "<<std::endl;
-            std::cout <<" help\n status\n exit\n"<<std::endl;
+            std::cout << " help\n run <program>\n status\n exit\n" << std::endl;
         }
         else if(command == "status"){
             std::cout << "Forge status" << std::endl;
             std::cout << "Jobs: " << jobs.size() << std::endl;
             for (Job& job : jobs) {
-                int result = waitpid(job.pid, nullptr, WNOHANG);
+                if(job.status != "running"){
+                    continue;
+                }
+                int childStatus;
+                int result = waitpid(job.pid, &childStatus, WNOHANG);
 
-                    if (result == job.pid) {
+                if (result == job.pid) {
+                  if (WIFEXITED(childStatus) && WEXITSTATUS(childStatus) == 0) {
                         job.status = "completed";
-                    }
-}
+                  }
+                else {
+                    job.status = "failed";
+                }
+             }
+            } // Check whether the child has finished without blocking Forge
+            // Check whether the child exited normally and successfully
             for (const Job& job : jobs) {
                 std::cout << "Job " << job.id
                   << " | PID: " << job.pid
@@ -49,6 +60,28 @@ int main() {
                   << std::endl;
                 }
         }
+        else if(command == "kill"){
+            int jobId;
+            std::cin >> jobId;
+
+            bool found = false; // Track whether the requested job ID exists
+
+
+            for(Job& job: jobs){
+                if(job.id == jobId){
+                    bool found = true;
+                    // Send SIGTERM to the process for this job
+                    kill(job.pid, SIGTERM);  // SIGTERM asks the operating system to terminate the process
+                    job.status = "terminated";
+
+                    std::cout<< "Job "<< job.id << " Terminated" << std::endl; 
+                }
+            }
+            if (!found) {
+                std::cout << "Job " << jobId << " not found" << std::endl;
+            }    
+    }
+        
         else if(command == "run"){
             std::cin >> program;
             pid_t pid = fork();  // Create a child process; fork() returns 0 to the child  and the child's PID to the parent
@@ -57,6 +90,7 @@ int main() {
                 execl(program.c_str(), program.c_str(), nullptr);   // Replace the child process with the program the user requested
                 // c_str() converts the C++ string into the C-style string exec expects
                 std::cout << "Failed to run program." << std::endl;
+                return 1;
             }
             else { // Parent process
                         Job job;
