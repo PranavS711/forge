@@ -4,12 +4,15 @@
 #include <sys/wait.h>
 #include <vector>
 #include <signal.h>
+#include <chrono>
 
 struct Job {
     int id;
     pid_t pid;  // stores the process ID
     std::string program;
     std::string status;
+    std::chrono::steady_clock::time_point startTime; // Record when the job starts
+    double runtimeSeconds;  // Store total runtime in seconds
 };
 
 int main() {
@@ -45,10 +48,15 @@ int main() {
                 if (result == job.pid) {
                   if (WIFEXITED(childStatus) && WEXITSTATUS(childStatus) == 0) {
                         job.status = "completed";
+                        auto endTime = std::chrono::steady_clock::now();
+
+                        job.runtimeSeconds = std::chrono::duration<double>(endTime - job.startTime).count(); // Record how long the job ran before finishing or failing
                   }
-                else {
-                    job.status = "failed";
-                }
+                    else {
+                        job.status = "failed";
+                         auto endTime = std::chrono::steady_clock::now();
+                        job.runtimeSeconds = std::chrono::duration<double>(endTime - job.startTime).count();
+                    }
              }
             } // Check whether the child has finished without blocking Forge
             // Check whether the child exited normally and successfully
@@ -57,6 +65,7 @@ int main() {
                   << " | PID: " << job.pid
                   << " | Program: " << job.program
                   << " | Status: " << job.status
+                  << " | Runtime: " << job.runtimeSeconds << "s"
                   << std::endl;
                 }
         }
@@ -69,11 +78,12 @@ int main() {
 
             for(Job& job: jobs){
                 if(job.id == jobId){
-                    bool found = true;
+                    found = true;
                     // Send SIGTERM to the process for this job
                     kill(job.pid, SIGTERM);  // SIGTERM asks the operating system to terminate the process
                     job.status = "terminated";
-
+                    auto endTime = std::chrono::steady_clock::now();
+                    job.runtimeSeconds = std::chrono::duration<double>(endTime - job.startTime).count();
                     std::cout<< "Job "<< job.id << " Terminated" << std::endl; 
                 }
             }
@@ -98,6 +108,8 @@ int main() {
                         job.pid = pid;
                         job.program = program;
                         job.status = "running";
+                        job.startTime = std::chrono::steady_clock::now();
+                        job.runtimeSeconds = 0.0;
                         std::cout << "Job " << job.id << " started (PID: "
                                 << job.pid << ")" << std::endl;
 
