@@ -5,16 +5,34 @@
 #include <vector>
 #include <signal.h>
 #include <chrono>
+#include "Job.h"
 
-struct Job {
-    int id;
-    pid_t pid;  // stores the process ID
-    std::string program;
-    std::string status;
-    std::chrono::steady_clock::time_point startTime; // Record when the job starts
-    double runtimeSeconds;  // Store total runtime in seconds
-};
+void updateJobStatuses(std::vector<Job>& jobs) {
+    for (Job& job : jobs) {
+        if (job.status != "running") {
+            continue;
+        }
 
+        int childStatus;
+
+       
+        int result = waitpid(job.pid, &childStatus, WNOHANG);
+
+        if (result == job.pid) {
+            // Record how long the job ran before finishing
+            auto endTime = std::chrono::steady_clock::now();
+            job.runtimeSeconds =
+                std::chrono::duration<double>(endTime - job.startTime).count();
+
+            if (WIFEXITED(childStatus) && WEXITSTATUS(childStatus) == 0) {
+                job.status = "completed";
+            }
+            else {
+                job.status = "failed";
+            }
+        }
+    }
+}
 int main() {
     std::cout << "Forge starting..." << std::endl;
 
@@ -33,32 +51,12 @@ int main() {
         }
         else if(command == "help"){
             std::cout << "Available commands: "<<std::endl;
-            std::cout << " help\n run <program>\n status\n exit\n" << std::endl;
+            std::cout << " help\n run <program>\n status\n kill <jobId>\n exit\n" << std::endl;
         }
         else if(command == "status"){
+            updateJobStatuses(jobs);
             std::cout << "Forge status" << std::endl;
             std::cout << "Jobs: " << jobs.size() << std::endl;
-            for (Job& job : jobs) {
-                if(job.status != "running"){
-                    continue;
-                }
-                int childStatus;
-                int result = waitpid(job.pid, &childStatus, WNOHANG);
-
-                if (result == job.pid) {
-                  if (WIFEXITED(childStatus) && WEXITSTATUS(childStatus) == 0) {
-                        job.status = "completed";
-                        auto endTime = std::chrono::steady_clock::now();
-
-                        job.runtimeSeconds = std::chrono::duration<double>(endTime - job.startTime).count(); // Record how long the job ran before finishing or failing
-                  }
-                    else {
-                        job.status = "failed";
-                         auto endTime = std::chrono::steady_clock::now();
-                        job.runtimeSeconds = std::chrono::duration<double>(endTime - job.startTime).count();
-                    }
-             }
-            } // Check whether the child has finished without blocking Forge
             // Check whether the child exited normally and successfully
             for (const Job& job : jobs) {
                 std::cout << "Job " << job.id
